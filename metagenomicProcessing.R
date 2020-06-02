@@ -12,10 +12,18 @@ rownames(otumat) = rawData$Group
 taxmat = as.matrix(rawData[,3:9])
 rownames(taxmat) = rawData$Group
 
+# do not show data on stack bar if count (%) of a taxa is blow this CUTOFF
+CUTOFF = 0.01
+
 # scaling plot margins
-sc=3
+sc=2
 
 relOTU = TRUE
+
+# order of bar plot
+desired_order = c("C1", "C2", "C3", "F1", "F2", "F3", 
+              "D1", "D2", "D3", "X0036.1" , "X0036.2", "X0036.3", 
+              "X1887.1", "X1887.2", "X1887.3")
 
 
 ###########################################
@@ -33,10 +41,11 @@ packageVersion("scales")
 library("grid")
 packageVersion("grid")
 
+library(matrixStats)
+
 theme_set(theme_bw())
 
-
-
+library("wesanderson")
 ######################################################
 ########### Processing data before plotting #########
 
@@ -55,17 +64,34 @@ TAXm = TAXmt[, 1:indTaxLevel]
 OTUm = otu_table(phyloGlom, taxa_are_rows = TRUE)
 
 # convert absolute to relative count as specified
-if (relOTU) {OTUm = OTUm / rep(colSums(OTUm), each = nrow(OTUm))}
+if (relOTU) {
+  OTUm = OTUm / rep(colSums(OTUm), each = nrow(OTUm))
+  # screen out taxa with abundance lower than CUTOFF
+  idxSel  = rowMaxs(as.matrix(OTUm)) > CUTOFF
+  OTUm = OTUm[idxSel, ]
+  TAXm = TAXm[idxSel, ]
+  }
 
 physeqm = phyloseq(OTUm, TAXm) ## phyloseq object after grouping 
 
-# generate abundance bar plots
-plot_bar(physeqm, fill = OTUlevel) + theme(plot.margin = margin(6*sc,1*sc,6*sc,1*sc,"cm")) +
-  theme(legend.position="right") + guides(fill=guide_legend(ncol=5))
-par(pin=c(1.9,1.9))  
-ggsave(filename = "myplot.png", plot = last_plot(), 
-       width=80, height=80, unit="cm")
 
+set.seed(123458)
+colorset = sample(wes_palette(length(rownames(OTUm)), name = "Darjeeling1", type = "continuous"))
+
+
+# generate abundance bar plots
+p <- plot_bar(physeqm, fill = OTUlevel)  + theme(plot.margin = margin(6*sc,1*sc,6*sc,1*sc,"cm")) +
+  theme(legend.position="right") + guides(fill=guide_legend(ncol=1)) +
+  theme(text = element_text(size=20)) + scale_fill_manual(values = colorset)
+
+# take care of plotting order
+pd <- p$data
+pd$Sample <- factor(pd$Sample, levels = desired_order)
+p$data <- pd
+print(p)
+
+ggsave(filename = "myplot.png", plot = last_plot(), 
+       width=40, height=40, unit="cm")
 
 
 ### ref. https://github.com/joey711/phyloseq/issues/616 
